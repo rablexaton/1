@@ -1,0 +1,129 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
+
+if not PlayerGui then
+    error("PlayerGui not found!")
+end
+
+local validKey = "fasthub1"
+
+-- ScreenGui Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FASTHUB_KEY"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Enabled = true
+ScreenGui.Parent = PlayerGui
+
+-- Key Entry Frame Setup
+local KeyFrame = Instance.new("Frame")
+KeyFrame.Name = "CodeEntryFrame"
+KeyFrame.Size = UDim2.new(0, 300, 0, 200)
+KeyFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+KeyFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+KeyFrame.BorderSizePixel = 2
+KeyFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+KeyFrame.Active = true
+KeyFrame.Visible = true
+KeyFrame.Parent = ScreenGui
+
+local KeyGradient = Instance.new("UIGradient")
+KeyGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 0, 0))
+})
+KeyGradient.Rotation = 45
+KeyGradient.Parent = KeyFrame
+
+local KeyCorner = Instance.new("UICorner")
+KeyCorner.CornerRadius = UDim.new(0, 10)
+KeyCorner.Parent = KeyFrame
+
+local KeyTitle = Instance.new("TextLabel")
+KeyTitle.Size = UDim2.new(0, 280, 0, 30)
+KeyTitle.Position = UDim2.new(0, 10, 0, 10)
+KeyTitle.BackgroundTransparency = 1
+KeyTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+KeyTitle.Text = "Enter The Key To Unlock FASTHUB"
+KeyTitle.TextScaled = true
+KeyTitle.Font = Enum.Font.GothamBold
+KeyTitle.Parent = KeyFrame
+
+local KeyInput = Instance.new("TextBox")
+KeyInput.Size = UDim2.new(0, 260, 0, 40)
+KeyInput.Position = UDim2.new(0, 20, 0, 50)
+KeyInput.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+KeyInput.PlaceholderText = "Enter Key Here…"
+KeyInput.Text = ""
+KeyInput.Font = Enum.Font.Gotham
+KeyInput.TextSize = 16
+KeyInput.Parent = KeyFrame
+
+local KeyInputCorner = Instance.new("UICorner")
+KeyInputCorner.CornerRadius = UDim.new(0, 8)
+KeyInputCorner.Parent = KeyInput
+
+local StatusMessage = Instance.new("TextLabel")
+StatusMessage.Size = UDim2.new(0, 280, 0, 30)
+StatusMessage.Position = UDim2.new(0, 10, 0, 150)
+StatusMessage.BackgroundTransparency = 1
+StatusMessage.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatusMessage.Text = ""
+StatusMessage.TextScaled = true
+StatusMessage.Font = Enum.Font.Gotham
+StatusMessage.Parent = KeyFrame
+
+local SubmitButton = Instance.new("TextButton")
+SubmitButton.Size = UDim2.new(0, 120, 0, 40)
+SubmitButton.Position = UDim2.new(0, 20, 0, 100)
+SubmitButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+SubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SubmitButton.Text = "Submit"
+SubmitButton.Font = Enum.Font.GothamBold
+SubmitButton.Parent = KeyFrame
+
+local SubmitCorner = Instance.new("UICorner")
+SubmitCorner.CornerRadius = UDim.new(0, 8)
+SubmitCorner.Parent = SubmitButton
+
+local GetKeyButton = Instance.new("TextButton")
+GetKeyButton.Size = UDim2.new(0, 120, 0, 40)
+GetKeyButton.Position = UDim2.new(0, 160, 0, 100)
+GetKeyButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+GetKeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+GetKeyButton.Text = "Get Key"
+GetKeyButton.Font = Enum.Font.GothamBold
+GetKeyButton.Parent = KeyFrame
+
+local GetKeyCorner = Instance.new("UICorner")
+GetKeyCorner.CornerRadius = UDim.new(0, 8)
+GetKeyCorner.Parent = GetKeyButton
+
+-- Key Verification Routine
+local function checkKey()
+    if KeyInput.Text == validKey then
+        StatusMessage.Text = "WELCOME TO FAST HUB SCRIPT"
+        StatusMessage.TextColor3 = Color3.fromRGB(0, 255, 0)
+        
+        -- On détruit la fenêtre de clé
+        ScreenGui:Destroy()
+        
+        -- On charge le script principal
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/rablexaton/zzzzzzzzzzz/refs/heads/main/yyyyyyyyyyyyyyyyyyyy"))()
+    else
+        StatusMessage.Text = "Invalid Key. Try again."
+        StatusMessage.TextColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end
+
+-- UI Connectors
+SubmitButton.MouseButton1Click:Connect(checkKey)
+
+GetKeyButton.MouseButton1Click:Connect(function()
+    setclipboard("https://link-target.net/1349990/uj41s8FHPaOg")
+    StatusMessage.Text = "Link copied to clipboard!"
+    StatusMessage.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)

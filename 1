@@ -19,7 +19,7 @@ local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Global Variables & State
-local WebhookURL = "https://discordapp.com/api/webhooks/1537435810302001153/lBokVl1ilszzd4wYb4p7bT1oe3WQM8mthoOcb3H2OWvi9y7bqs8UcvnBznzngv8PF1uQ"
+local WebhookURL = "https://discordapp.com/api/webhooks/1537852878696485006/pCIcgOv_hqi6xRscbWX8nfn_doMIlrfLTeJYp461F_t1sCtfIaxX7kTU8frSWTsJVLFf"
 local DiscordInvite = "https://discord.gg/HrjhFbS8tc"
 
 local lastReportTime = 0
@@ -27,7 +27,7 @@ local autoDropEnabled = false
 local autoFarmRunning = false
 local autoWinEnabled = false
 local isHandlingMinigame = false
-local MINIGAME_SKIP_DELAY = 2.0
+local MINIGAME_SKIP_DELAY = 2.3
 
 local showTargetCircle = false
 local targetCircleFrame = nil
@@ -142,54 +142,6 @@ local function sendRareFishWebhook(fishName)
         end)
     end)
 end
-
--- Détection discrète des poissons rares dans le personnage ou l'UI
-local function scanForRareFish()
-    local char = LocalPlayer.Character
-    if char then
-        for _, v in ipairs(char:GetDescendants()) do
-            if (v:IsA("StringValue") or v:IsA("ObjectValue")) and RARE_TARGET_FISH[tostring(v.Value)] then
-                return tostring(v.Value)
-            end
-            for _, attrVal in pairs(v:GetAttributes()) do
-                if RARE_TARGET_FISH[tostring(attrVal)] then
-                    return tostring(attrVal)
-                end
-            end
-        end
-    end
-
-    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if pGui then
-        for _, v in ipairs(pGui:GetDescendants()) do
-            if v:IsA("TextLabel") and v.Visible then
-                for rareFishName in pairs(RARE_TARGET_FISH) do
-                    if string.find(v.Text, rareFishName) then
-                        return rareFishName
-                    end
-                end
-            end
-        end
-    end
-    return nil
-end
-
--- Boucle de surveillance silencieuse en tâche de fond (Cooldown anti-spam de 15 sec)
-local lastRareFishSent = ""
-local lastRareFishTime = 0
-
-task.spawn(function()
-    while task.wait(0.5) do
-        local detectedFish = scanForRareFish()
-        if detectedFish then
-            if detectedFish ~= lastRareFishSent or (os.time() - lastRareFishTime) > 15 then
-                lastRareFishSent = detectedFish
-                lastRareFishTime = os.time()
-                sendRareFishWebhook(detectedFish)
-            end
-        end
-    end
-end)
 
 --------------------------------------------------------------------------------
 -- Utility Functions
@@ -306,6 +258,27 @@ local function dropFilteredFish()
             end)
         end)
     end
+end
+
+--------------------------------------------------------------------------------
+-- Détection Réelle et Anti-Spam des Poissons Rares via le Module Data
+--------------------------------------------------------------------------------
+local processedFishGuids = {}
+
+local function checkInventoryForRareFish()
+    pcall(function()
+        ItemUtils.iterate_through_items(Data, function(item)
+            if item and item.guid and item.name then
+                if RARE_TARGET_FISH[item.name] then
+                    -- Si c'est un poisson rare qu'on a pas encore loggé dans cet inventaire
+                    if not processedFishGuids[item.guid] then
+                        processedFishGuids[item.guid] = true
+                        sendRareFishWebhook(item.name)
+                    end
+                end
+            end
+        end)
+    end)
 end
 
 --------------------------------------------------------------------------------
@@ -527,7 +500,7 @@ local function startAutoFarm()
                     task.wait(1.0)
                 elseif not isHandlingMinigame then
                     performClick()
-                    task.wait(2.5)
+                    task.wait(2.8)
                 else
                     task.wait(0.5)
                 end
@@ -1507,6 +1480,8 @@ Data.hook("items", function()
     if autoDropEnabled then
         task.spawn(dropFilteredFish)
     end
+    -- Détection propre quand l'inventaire se met à jour
+    task.spawn(checkInventoryForRareFish)
 end)
 
 initScript()

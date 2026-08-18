@@ -15,9 +15,18 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
--- Global Variables & State
-local WebhookURL = "https://discordapp.com/api/webhooks/1535657604317970482/pY319tfhBa74Rnbvj9biqqBbo_EZy3EtoOSubV_pR2JSD5vuWpPC8dc8zI65WxB57xjC"
+-- Variables (Spot Fisher + Fast Hub State)
+local targetClickPosition = nil
+local isCatchingClick = false
+local isAutoFishing = false
+local autoClickThread = nil
+
+-- WEBHOOKS CONFIGURATION :
+local WebhookURL = "https://discordapp.com/api/webhooks/1538976109725753437/-8LAktcNK2HyFQokX9XPdR4ct9dnVqvGMgw74Z7Nf2yIAqPxBIwAa4jRpcTTD6oaO4Zg" -- Webhook 1 : Exécutions et Rapports[cite: 1]
+local RareFishWebhookURL = "https://discordapp.com/api/webhooks/1539307471808503950/pVH11g7wzlzpyarTJSkw1fc6BlOgiwMKGH11_pP9YN6EZsl-dyxeWKEsqglqZoljSoGm" -- Webhook 2 : Uniquement pour les poissons rares
+
 local DiscordInvite = "https://discord.gg/HrjhFbS8tc"
 
 local lastReportTime = 0
@@ -58,7 +67,7 @@ local targetFishList = {
 }
 
 --------------------------------------------------------------------------------
--- Webhook Logging & Rare Fish Tracker
+-- Webhook Logging & Rare Fish Tracker (Anti-Spam 1 Message)
 --------------------------------------------------------------------------------
 
 local function sendDiscordWebhook(titleText, descriptionText)
@@ -73,14 +82,14 @@ local function sendDiscordWebhook(titleText, descriptionText)
                     color = 14427926,
                     thumbnail = { url = thumbUrl },
                     fields = {
-                        { name = "👤 Username", value = LocalPlayer.Name, inline = true },
-                        { name = "📛 Display Name", value = LocalPlayer.DisplayName, inline = true },
-                        { name = "🆔 User ID", value = tostring(LocalPlayer.UserId), inline = true },
-                        { name = "📅 Account Age", value = tostring(LocalPlayer.AccountAge) .. " days", inline = true },
-                        { name = "⚙️ Device", value = deviceType, inline = true },
-                        { name = "🎮 Place ID", value = tostring(game.PlaceId), inline = true },
-                        { name = "🔗 Job ID", value = "```" .. tostring(game.JobId) .. "```", inline = false },
-                        { name = "📝 Details", value = descriptionText or "Script executed successfully.", inline = false }
+                        { name = "👤 Username / اسم المستخدم", value = LocalPlayer.Name, inline = true },
+                        { name = "📛 Display Name / الاسم المعروض", value = LocalPlayer.DisplayName, inline = true },
+                        { name = "🆔 User ID / آي دي المستخدم", value = tostring(LocalPlayer.UserId), inline = true },
+                        { name = "📅 Account Age / عمر الحساب", value = tostring(LocalPlayer.AccountAge) .. " days / أيام", inline = true },
+                        { name = "⚙️ Device / الجهاز", value = deviceType, inline = true },
+                        { name = "🎮 Place ID / آي دي اللعبة", value = tostring(game.PlaceId), inline = true },
+                        { name = "🔗 Job ID / آي دي السيرفر", value = "```" .. tostring(game.JobId) .. "```", inline = false },
+                        { name = "📝 Details / التفاصيل", value = descriptionText or "Script executed successfully. / تم تشغيل السكربت بنجاح.", inline = false }
                     },
                     footer = { text = "Made by Anouar777x | " .. os.date("%Y-%m-%d %X") }
                 }}
@@ -99,7 +108,7 @@ local function sendDiscordWebhook(titleText, descriptionText)
     end)
 end
 
-sendDiscordWebhook("🚀 New Execution - Fast Hub", "A user has executed the script.")
+sendDiscordWebhook("🚀 New Execution - Fast Hub / تشغيل جديد", "A user has executed the script. / قام أحد المستخدمين بتشغيل السكربت.")
 
 local lastSentFish = ""
 local lastSentTime = 0
@@ -107,9 +116,9 @@ local lastSentTime = 0
 local function getNearbyPlayers(maxDistance)
     local nearbyList = {}
     local myChar = LocalPlayer.Character
-    if not myChar then return "Aucun" end
+    if not myChar then return "None / لا يوجد" end
     local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return "Aucun" end
+    if not myHrp then return "None / لا يوجد" end
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -123,12 +132,12 @@ local function getNearbyPlayers(maxDistance)
         end
     end
 
-    return #nearbyList == 0 and ("Aucun joueur à moins de " .. tostring(maxDistance) .. "m") or table.concat(nearbyList, ", ")
+    return #nearbyList == 0 and ("No players within " .. tostring(maxDistance) .. "m / لا يوجد لاعبين على مسافة " .. tostring(maxDistance) .. " متر") or table.concat(nearbyList, ", ")
 end
 
 local function sendRareFishWebhook(fishName)
     local currentTime = os.time()
-    if fishName == lastSentFish and (currentTime - lastSentTime) < 20 then
+    if fishName == lastSentFish and (currentTime - lastSentTime) < 60 then
         return
     end
 
@@ -145,15 +154,15 @@ local function sendRareFishWebhook(fishName)
             local payload = {
                 username = "Fast Hub Fish Tracker",
                 embeds = {{
-                    title = "🎯 POISSON RARE : " .. fishName:upper() .. " !",
+                    title = "🎯 RARE FISH / سمكة نادرة : " .. fishName:upper() .. " !",
                     color = 16744192,
                     fields = {
-                        { name = "👤 Joueur Cible", value = LocalPlayer.Name .. " (@" .. LocalPlayer.DisplayName .. ")", inline = true },
-                        { name = "🐟 Poisson", value = "**" .. fishName .. "**", inline = true },
-                        { name = "📌 Statut", value = "**🎣 Accroché à la ligne dans l'eau !**", inline = false },
-                        { name = "👥 Joueurs Proches (50m)", value = nearbyPlayers, inline = false },
-                        { name = "🆔 Job ID", value = "```" .. jobId .. "```", inline = false },
-                        { name = "🚀 Script de Rejoint Immédiat", value = "```lua\n" .. joinScript .. "\n```", inline = false }
+                        { name = "👤 Target Player / اللاعب المستهدف", value = LocalPlayer.Name .. " (@" .. LocalPlayer.DisplayName .. ")", inline = true },
+                        { name = "🐟 Fish / السمكة", value = "**" .. fishName .. "**", inline = true },
+                        { name = "📌 Status / الحالة", value = "**🎣 Hooked on line in water! / مسكة في السنارة داخل الماء!**", inline = false },
+                        { name = "👥 Nearby Players (50m) / اللاعبون القريبون", value = nearbyPlayers, inline = false },
+                        { name = "🆔 Job ID / آي دي السيرفر", value = "```" .. jobId .. "```", inline = false },
+                        { name = "🚀 Fast Rejoin Script / سكربت الدخول السريع", value = "```lua\n" .. joinScript .. "\n```", inline = false }
                     },
                     footer = { text = "Target Sniping System | " .. os.date("%X") }
                 }}
@@ -162,7 +171,7 @@ local function sendRareFishWebhook(fishName)
             local req = (http and http.request) or request or (syn and syn.request) or http_request or (fluxus and fluxus.request)
             if req then
                 req({
-                    Url = WebhookURL,
+                    Url = RareFishWebhookURL, -- Utilise le 2ème webhook pour les poissons
                     Method = "POST",
                     Headers = { ["Content-Type"] = "application/json" },
                     Body = HttpService:JSONEncode(payload)
@@ -172,11 +181,9 @@ local function sendRareFishWebhook(fishName)
     end)
 end
 
--- Détection ultra-stricte (Inspecte uniquement le personnage et les valeurs de session du jeu)
 local function getHookedFishName()
     local char = LocalPlayer.Character
     if char then
-        -- Inspection de la canne à pêche tenue en main ou de la ligne
         for _, v in ipairs(char:GetDescendants()) do
             if v:IsA("ValueBase") then
                 local val = tostring(v.Value)
@@ -192,7 +199,6 @@ local function getHookedFishName()
         end
     end
 
-    -- Inspection du dossier de données temporaire du joueur s'il existe
     local playerData = LocalPlayer:FindFirstChild("PlayerData") or LocalPlayer:FindFirstChild("Data")
     if playerData then
         local currentHook = playerData:FindFirstChild("CurrentFish") or playerData:FindFirstChild("Hooked")
@@ -206,7 +212,7 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(1)
         local hookedFish = getHookedFishName()
         if hookedFish then
             sendRareFishWebhook(hookedFish)
@@ -400,6 +406,11 @@ local function equipRod()
     end
     
     if backpack then
+        local tool = backpack:FindFirstChildOfClass("Tool")
+        if tool and tool.Name:lower():find("rod") then
+            tool.Parent = character
+            return tool
+        end
         for _, item in pairs(backpack:GetChildren()) do
             if item:IsA("Tool") and item.Name:lower():find("rod") then
                 item.Parent = character
@@ -415,12 +426,14 @@ local function performClick()
     local rod = equipRod()
     if rod then
         rod:Activate()
-        return
     end
 
     local posX, posY
 
-    if deviceType == "PC" then
+    if targetClickPosition then
+        posX = targetClickPosition.X
+        posY = targetClickPosition.Y
+    elseif deviceType == "PC" then
         local mousePos = UserInputService:GetMouseLocation()
         posX = mousePos.X
         posY = mousePos.Y
@@ -496,7 +509,7 @@ end
 local function startAutoWin()
     if not autoWinEnabled then
         autoWinEnabled = true
-        notifyUser("🏆 Auto Win Enabled", "success")
+        notifyUser("🏆 Auto Win Enabled / الفوز التلقائي مفعل", "success")
         autoWinThread = task.spawn(function()
             while autoWinEnabled do
                 if isMinigameActive() and not isHandlingMinigame then
@@ -515,7 +528,7 @@ local function stopAutoWin()
             task.cancel(autoWinThread)
             autoWinThread = nil
         end
-        notifyUser("⏹️ Auto Win Disabled", "error")
+        notifyUser("⏹️ Auto Win Disabled / إيقاف الفوز التلقائي", "error")
     end
 end
 
@@ -530,7 +543,7 @@ end
 local function startAutoFarm()
     if not autoFarmRunning then
         autoFarmRunning = true
-        notifyUser("⚡ Auto Farm Activated ⚡", "success")
+        notifyUser("⚡ Auto Farm Activated / تفعيل الزراعة التلقائية ⚡", "success")
 
         autoFarmThread = task.spawn(function()
             while autoFarmRunning do
@@ -557,7 +570,7 @@ local function stopAutoFarm()
             task.cancel(autoFarmThread)
             autoFarmThread = nil
         end
-        notifyUser("⏹️ Auto Farm Stopped", "error")
+        notifyUser("⏹️ Auto Farm Stopped / إيقاف الزراعة التلقائية", "error")
     end
 end
 
@@ -652,7 +665,7 @@ local function createTargetCircle(parent)
     clickLabel.Size = UDim2.new(1, 0, 1, 0)
     clickLabel.Position = UDim2.new(0, 0, 0, 0)
     clickLabel.BackgroundTransparency = 1
-    clickLabel.Text = "Click Here"
+    clickLabel.Text = "Click Here / انقر هنا"
     clickLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     clickLabel.TextSize = 13
     clickLabel.Font = Enum.Font.GothamBold
@@ -673,6 +686,117 @@ local function createTargetCircle(parent)
     end)
 
     makeDraggable(frame)
+    return frame
+end
+
+local function createSpotFisherUI(parent)
+    local frame = Instance.new("Frame", parent)
+    frame.Name = "SpotFisherUI"
+    frame.Size = UDim2.new(0, 260, 0, 165)
+    frame.Position = UDim2.new(0.7, -130, 0.35, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(15, 0, 0)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+    frame.Visible = false
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+    local stroke = Instance.new("UIStroke", frame)
+    stroke.Color = Color3.fromRGB(220, 20, 20)
+    stroke.Thickness = 1.5
+
+    local header = Instance.new("TextLabel", frame)
+    header.Size = UDim2.new(1, 0, 0, 35)
+    header.BackgroundColor3 = Color3.fromRGB(35, 5, 5)
+    header.Text = "🎯 Spot Fisher | Fast Hub"
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 13
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 12)
+
+    local closeBtn = Instance.new("TextButton", header)
+    closeBtn.Size = UDim2.new(0, 24, 0, 24)
+    closeBtn.Position = UDim2.new(1, -30, 0, 5.5)
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextSize = 12
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
+    closeBtn.BorderSizePixel = 0
+    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+    closeBtn.MouseButton1Click:Connect(function() frame.Visible = false end)
+
+    local statusLabel = Instance.new("TextLabel", frame)
+    statusLabel.Size = UDim2.new(1, -20, 0, 25)
+    statusLabel.Position = UDim2.new(0, 10, 0, 40)
+    statusLabel.Text = "📍 Spot: Click 'Select Spot' / حدد المكان"
+    statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.TextSize = 11
+    statusLabel.BackgroundTransparency = 1
+
+    local selectBtn = Instance.new("TextButton", frame)
+    selectBtn.Size = UDim2.new(1, -20, 0, 35)
+    selectBtn.Position = UDim2.new(0, 10, 0, 70)
+    selectBtn.BackgroundColor3 = Color3.fromRGB(80, 15, 15)
+    selectBtn.Text = "🔍 Select Water Spot / حدد موقع الماء"
+    selectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    selectBtn.Font = Enum.Font.GothamBold
+    selectBtn.TextSize = 11
+    Instance.new("UICorner", selectBtn).CornerRadius = UDim.new(0, 8)
+
+    local resetSpotBtn = Instance.new("TextButton", frame)
+    resetSpotBtn.Size = UDim2.new(1, -20, 0, 25)
+    resetSpotBtn.Position = UDim2.new(0, 10, 0, 110)
+    resetSpotBtn.BackgroundColor3 = Color3.fromRGB(40, 10, 10)
+    resetSpotBtn.Text = "🔄 Reset Custom Position / إعادة تعيين"
+    resetSpotBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    resetSpotBtn.Font = Enum.Font.Gotham
+    resetSpotBtn.TextSize = 10
+    Instance.new("UICorner", resetSpotBtn).CornerRadius = UDim.new(0, 6)
+
+    local credits = Instance.new("TextLabel", frame)
+    credits.Size = UDim2.new(1, 0, 0, 20)
+    credits.Position = UDim2.new(0, 0, 1, -22)
+    credits.Text = "Made by Anouar777x"
+    credits.TextColor3 = Color3.fromRGB(120, 120, 120)
+    credits.Font = Enum.Font.Gotham
+    credits.TextSize = 10
+    credits.BackgroundTransparency = 1
+
+    selectBtn.MouseButton1Click:Connect(function()
+        isCatchingClick = true
+        selectBtn.Text = "⏳ CLICK IN LAKE NOW / انقر في البحيرة..."
+        selectBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+        statusLabel.Text = "🎯 CLICK IN LAKE NOW / انقر في البحيرة..."
+        statusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+    end)
+
+    resetSpotBtn.MouseButton1Click:Connect(function()
+        targetClickPosition = nil
+        statusLabel.Text = "📍 Spot: Reset / تم إلغاء الموقع المخصص"
+        statusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        notifyUser("🔄 Spot position reset!", "error")
+    end)
+
+    UserInputService.InputBegan:Connect(function(input)
+        if isCatchingClick and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            local mousePos = UserInputService:GetMouseLocation()
+            targetClickPosition = Vector2.new(mousePos.X, mousePos.Y)
+            
+            isCatchingClick = false
+            selectBtn.Text = "✅ Spot Saved / تم حفظ المكان!"
+            selectBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
+            
+            statusLabel.Text = "📍 Pos: " .. math.floor(targetClickPosition.X) .. ", " .. math.floor(targetClickPosition.Y)
+            statusLabel.TextColor3 = Color3.fromRGB(50, 255, 100)
+            
+            task.delay(1.5, function()
+                selectBtn.Text = "🔄 Change Spot / تغيير المكان"
+                selectBtn.BackgroundColor3 = Color3.fromRGB(80, 15, 15)
+            end)
+        end
+    end)
 
     return frame
 end
@@ -725,7 +849,7 @@ local function createFishManagerUI(parent)
     local statusLabel = Instance.new("TextLabel", frame)
     statusLabel.Size = UDim2.new(1, -20, 0, 22)
     statusLabel.Position = UDim2.new(0, 10, 0, 42)
-    statusLabel.Text = "🔴 OFF"
+    statusLabel.Text = "🔴 OFF / متوقف"
     statusLabel.TextColor3 = Color3.fromRGB(200, 50, 50)
     statusLabel.TextSize = 12
     statusLabel.Font = Enum.Font.GothamBold
@@ -755,7 +879,7 @@ local function createFishManagerUI(parent)
     local toggleBtn = Instance.new("TextButton", controlsFrame)
     toggleBtn.Size = UDim2.new(1, 0, 0, 32)
     toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
-    toggleBtn.Text = "▶ START"
+    toggleBtn.Text = "▶ START / بدء"
     toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     toggleBtn.TextSize = 13
     toggleBtn.Font = Enum.Font.GothamBold
@@ -769,7 +893,7 @@ local function createFishManagerUI(parent)
     local selectAllBtn = Instance.new("TextButton", selectionContainer)
     selectAllBtn.Size = UDim2.new(0, 105, 1, 0)
     selectAllBtn.BackgroundColor3 = Color3.fromRGB(120, 20, 20)
-    selectAllBtn.Text = "✅ Select All"
+    selectAllBtn.Text = "✅ Select All / تحديد الكل"
     selectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     selectAllBtn.TextSize = 11
     selectAllBtn.Font = Enum.Font.GothamBold
@@ -779,7 +903,7 @@ local function createFishManagerUI(parent)
     deselectAllBtn.Size = UDim2.new(0, 105, 1, 0)
     deselectAllBtn.Position = UDim2.new(1, -105, 0, 0)
     deselectAllBtn.BackgroundColor3 = Color3.fromRGB(40, 5, 5)
-    deselectAllBtn.Text = "❌ Clear All"
+    deselectAllBtn.Text = "❌ Clear All / إلغاء الكل"
     deselectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     deselectAllBtn.TextSize = 11
     deselectAllBtn.Font = Enum.Font.GothamBold
@@ -831,15 +955,15 @@ local function createFishManagerUI(parent)
     toggleBtn.MouseButton1Click:Connect(function()
         autoDropEnabled = not autoDropEnabled
         if autoDropEnabled then
-            toggleBtn.Text = "⏹ STOP"
+            toggleBtn.Text = "⏹ STOP / إيقاف"
             toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 5, 5)
-            statusLabel.Text = "🟢 ON"
+            statusLabel.Text = "🟢 ON / يعمل"
             statusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
             task.spawn(dropFilteredFish)
         else
-            toggleBtn.Text = "▶ START"
+            toggleBtn.Text = "▶ START / بدء"
             toggleBtn.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
-            statusLabel.Text = "🔴 OFF"
+            statusLabel.Text = "🔴 OFF / متوقف"
             statusLabel.TextColor3 = Color3.fromRGB(150, 30, 30)
         end
     end)
@@ -855,7 +979,6 @@ local function createFishManagerUI(parent)
     end)
 
     refreshList()
-
     return frame
 end
 
@@ -877,7 +1000,7 @@ local function createChangelogUI(parent)
     local header = Instance.new("TextLabel", frame)
     header.Size = UDim2.new(1, 0, 0, 35)
     header.BackgroundColor3 = Color3.fromRGB(35, 5, 5)
-    header.Text = "📜 Updates | Made by Anouar777x"
+    header.Text = "📜 Updates / التحديثات | Anouar777x"
     header.TextColor3 = Color3.fromRGB(255, 255, 255)
     header.Font = Enum.Font.GothamBold
     header.TextSize = 12
@@ -928,8 +1051,8 @@ local function createChangelogUI(parent)
         textLabel.BackgroundTransparency = 1
     end
 
-    addLogEntry("Fast Hub Released", "Fixed Pc Auto Farm")
-    addLogEntry("Made by Anouar777x", "Fixed Mobile Auto Farm")
+    addLogEntry("Added Spot Fisher Fixed", "Added reset button")
+    addLogEntry("New", "Fixed AutoFarm ")
 
     return frame
 end
@@ -952,7 +1075,7 @@ local function createReportUI(parent)
     local header = Instance.new("TextLabel", frame)
     header.Size = UDim2.new(1, 0, 0, 35)
     header.BackgroundColor3 = Color3.fromRGB(40, 5, 5)
-    header.Text = "⚠️ Report Issue | Fast Hub"
+    header.Text = "⚠️ Report Issue / إبلاغ عن مشكلة"
     header.TextColor3 = Color3.fromRGB(255, 255, 255)
     header.Font = Enum.Font.GothamBold
     header.TextSize = 13
@@ -972,7 +1095,7 @@ local function createReportUI(parent)
     textBox.Position = UDim2.new(0, 10, 0, 48)
     textBox.BackgroundColor3 = Color3.fromRGB(25, 5, 5)
     textBox.Text = ""
-    textBox.PlaceholderText = "Describe the bug for Anouar777x..."
+    textBox.PlaceholderText = "Describe the bug / صف المشكلة هنا..."
     textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     textBox.PlaceholderColor3 = Color3.fromRGB(150, 80, 80)
     textBox.TextSize = 12
@@ -988,7 +1111,7 @@ local function createReportUI(parent)
     sendBtn.Size = UDim2.new(1, -20, 0, 38)
     sendBtn.Position = UDim2.new(0, 10, 1, -48)
     sendBtn.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
-    sendBtn.Text = "🚀 Send Report"
+    sendBtn.Text = "🚀 Send Report / إرسال التقرير"
     sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     sendBtn.Font = Enum.Font.GothamBold
     sendBtn.TextSize = 13
@@ -998,27 +1121,27 @@ local function createReportUI(parent)
         local currentTime = os.time()
         if currentTime - lastReportTime < 1800 then
             local remainingMinutes = math.ceil((1800 - (currentTime - lastReportTime)) / 60)
-            notifyUser("⏳ Wait " .. remainingMinutes .. "m before reporting again.", "error")
+            notifyUser("⏳ Wait " .. remainingMinutes .. "m before reporting again. / انتظر دقيقة قبل الإبلاغ مجدداً.", "error")
             return
         end
 
         if textBox.Text == "" or #textBox.Text < 5 then
-            notifyUser("❌ Please describe the problem properly!", "error")
+            notifyUser("❌ Please describe the problem properly! / الرجاء وصف المشكلة بشكل صحيح!", "error")
             return
         end
 
         local reportText = textBox.Text
-        sendBtn.Text = "⏳ Sending..."
+        sendBtn.Text = "⏳ Sending / جاري الإرسال..."
         sendBtn.Active = false
 
-        sendDiscordWebhook("🚨 New Report - Fast Hub", reportText)
+        sendDiscordWebhook("🚨 New Report / تقرير جديد - Fast Hub", reportText)
 
         lastReportTime = currentTime
         textBox.Text = ""
         frame.Visible = false
-        notifyUser("✅ Report sent to Anouar777x!", "success")
+        notifyUser("✅ Report sent! / تم إرسال التقرير بنجاح!", "success")
 
-        sendBtn.Text = "🚀 Send Report"
+        sendBtn.Text = "🚀 Send Report / إرسال التقرير"
         sendBtn.Active = true
     end)
 
@@ -1038,6 +1161,7 @@ local function initScript()
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
     local fishUI = createFishManagerUI(screenGui)
+    local spotFisherUI = createSpotFisherUI(screenGui)
     local changelogUI = createChangelogUI(screenGui)
     local reportUI = createReportUI(screenGui)
 
@@ -1095,7 +1219,7 @@ local function initScript()
     local deviceQuestion = Instance.new("TextLabel", deviceFrame)
     deviceQuestion.Size = UDim2.new(1, 0, 0, 45)
     deviceQuestion.BackgroundTransparency = 1
-    deviceQuestion.Text = "Select Device | Fast Hub"
+    deviceQuestion.Text = "Select Device / اختر الجهاز"
     deviceQuestion.TextColor3 = Color3.fromRGB(255, 255, 255)
     deviceQuestion.Font = Enum.Font.GothamBold
     deviceQuestion.TextSize = 16
@@ -1104,20 +1228,20 @@ local function initScript()
     mobileBtn.Size = UDim2.new(0, 120, 0, 80)
     mobileBtn.Position = UDim2.new(0.5, -135, 0.4, 0)
     mobileBtn.BackgroundColor3 = Color3.fromRGB(160, 20, 20)
-    mobileBtn.Text = "📱\nMobile"
+    mobileBtn.Text = "📱\nMobile / هاتف"
     mobileBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     mobileBtn.Font = Enum.Font.GothamBold
-    mobileBtn.TextSize = 16
+    mobileBtn.TextSize = 15
     Instance.new("UICorner", mobileBtn).CornerRadius = UDim.new(0, 12)
 
     local pcBtn = Instance.new("TextButton", deviceFrame)
     pcBtn.Size = UDim2.new(0, 120, 0, 80)
     pcBtn.Position = UDim2.new(0.5, 15, 0.4, 0)
     pcBtn.BackgroundColor3 = Color3.fromRGB(80, 10, 10)
-    pcBtn.Text = "💻\nPC"
+    pcBtn.Text = "💻\nPC / كمبيوتر"
     pcBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     pcBtn.Font = Enum.Font.GothamBold
-    pcBtn.TextSize = 16
+    pcBtn.TextSize = 15
     Instance.new("UICorner", pcBtn).CornerRadius = UDim.new(0, 12)
 
     -- PC GUI Window
@@ -1164,9 +1288,19 @@ local function initScript()
     fishMenuBtn.TextSize = 14
     Instance.new("UICorner", fishMenuBtn).CornerRadius = UDim.new(0, 8)
 
+    local spotMenuBtn = Instance.new("TextButton", pcHeader)
+    spotMenuBtn.Size = UDim2.new(0, 32, 0, 32)
+    spotMenuBtn.Position = UDim2.new(0, 78, 0, 6)
+    spotMenuBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 10)
+    spotMenuBtn.Text = "🎯"
+    spotMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    spotMenuBtn.Font = Enum.Font.GothamBold
+    spotMenuBtn.TextSize = 14
+    Instance.new("UICorner", spotMenuBtn).CornerRadius = UDim.new(0, 8)
+
     local changelogBtn = Instance.new("TextButton", pcHeader)
     changelogBtn.Size = UDim2.new(0, 32, 0, 32)
-    changelogBtn.Position = UDim2.new(0, 78, 0, 6)
+    changelogBtn.Position = UDim2.new(0, 114, 0, 6)
     changelogBtn.BackgroundColor3 = Color3.fromRGB(100, 10, 10)
     changelogBtn.Text = "📜"
     changelogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1176,7 +1310,7 @@ local function initScript()
 
     local reportBtn = Instance.new("TextButton", pcHeader)
     reportBtn.Size = UDim2.new(0, 32, 0, 32)
-    reportBtn.Position = UDim2.new(0, 114, 0, 6)
+    reportBtn.Position = UDim2.new(0, 150, 0, 6)
     reportBtn.BackgroundColor3 = Color3.fromRGB(220, 20, 20)
     reportBtn.Text = "⚠️"
     reportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1185,13 +1319,13 @@ local function initScript()
     Instance.new("UICorner", reportBtn).CornerRadius = UDim.new(0, 8)
 
     local pcTitle = Instance.new("TextLabel", pcHeader)
-    pcTitle.Size = UDim2.new(1, -200, 1, 0)
-    pcTitle.Position = UDim2.new(0, 155, 0, 0)
+    pcTitle.Size = UDim2.new(1, -230, 1, 0)
+    pcTitle.Position = UDim2.new(0, 190, 0, 0)
     pcTitle.BackgroundTransparency = 1
-    pcTitle.Text = "Fast Hub | Made by Anouar777x"
+    pcTitle.Text = "Fast Hub | Anouar777x"
     pcTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
     pcTitle.Font = Enum.Font.GothamBold
-    pcTitle.TextSize = 13
+    pcTitle.TextSize = 12
     pcTitle.TextXAlignment = Enum.TextXAlignment.Left
 
     local closePcBtn = Instance.new("TextButton", pcHeader)
@@ -1221,7 +1355,7 @@ local function initScript()
     rebindBtn.Size = UDim2.new(0, 110, 1, 0)
     rebindBtn.Position = UDim2.new(1, -110, 0, 0)
     rebindBtn.BackgroundColor3 = Color3.fromRGB(50, 5, 5)
-    rebindBtn.Text = "🔄 Bind Key"
+    rebindBtn.Text = "🔄 Bind / زر"
     rebindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     rebindBtn.Font = Enum.Font.GothamBold
     rebindBtn.TextSize = 14
@@ -1231,7 +1365,7 @@ local function initScript()
     pcAutoFarmBtn.Size = UDim2.new(1, -40, 0, 40)
     pcAutoFarmBtn.Position = UDim2.new(0, 20, 0, 135)
     pcAutoFarmBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
-    pcAutoFarmBtn.Text = "🤖 Auto Farm [OFF]"
+    pcAutoFarmBtn.Text = "🤖 Auto Farm [OFF / متوقف]"
     pcAutoFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     pcAutoFarmBtn.Font = Enum.Font.GothamBold
     pcAutoFarmBtn.TextSize = 14
@@ -1241,7 +1375,7 @@ local function initScript()
     pcAutoWinBtn.Size = UDim2.new(1, -40, 0, 40)
     pcAutoWinBtn.Position = UDim2.new(0, 20, 0, 183)
     pcAutoWinBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
-    pcAutoWinBtn.Text = "🏆 Auto Win Minigame [OFF]"
+    pcAutoWinBtn.Text = "🏆 Auto Win Minigame [OFF / متوقف]"
     pcAutoWinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     pcAutoWinBtn.Font = Enum.Font.GothamBold
     pcAutoWinBtn.TextSize = 14
@@ -1258,7 +1392,7 @@ local function initScript()
 
     -- Mobile GUI Window
     local mobileFrame = Instance.new("Frame", screenGui)
-    mobileFrame.Size = UDim2.new(0, 280, 0, 320)
+    mobileFrame.Size = UDim2.new(0, 280, 0, 360)
     mobileFrame.Position = UDim2.new(0, 15, 0.3, 0)
     mobileFrame.BackgroundColor3 = Color3.fromRGB(10, 0, 0)
     mobileFrame.BorderSizePixel = 0
@@ -1281,10 +1415,10 @@ local function initScript()
     Instance.new("UICorner", mobHeader).CornerRadius = UDim.new(0, 12)
 
     local mobTitle = Instance.new("TextLabel", mobHeader)
-    mobTitle.Size = UDim2.new(1, -80, 1, 0)
-    mobTitle.Position = UDim2.new(0, 12, 0, 0)
+    mobTitle.Size = UDim2.new(1, -110, 1, 0)
+    mobTitle.Position = UDim2.new(0, 10, 0, 0)
     mobTitle.BackgroundTransparency = 1
-    mobTitle.Text = "Fast Hub | Anouar777x"
+    mobTitle.Text = "Fast Hub"
     mobTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
     mobTitle.Font = Enum.Font.GothamBold
     mobTitle.TextSize = 12
@@ -1292,7 +1426,7 @@ local function initScript()
 
     local mobFishBtn = Instance.new("TextButton", mobHeader)
     mobFishBtn.Size = UDim2.new(0, 30, 0, 30)
-    mobFishBtn.Position = UDim2.new(1, -75, 0, 5)
+    mobFishBtn.Position = UDim2.new(1, -105, 0, 5)
     mobFishBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
     mobFishBtn.Text = "🐟"
     mobFishBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1300,9 +1434,19 @@ local function initScript()
     mobFishBtn.TextSize = 14
     Instance.new("UICorner", mobFishBtn).CornerRadius = UDim.new(0, 6)
 
+    local mobSpotBtn = Instance.new("TextButton", mobHeader)
+    mobSpotBtn.Size = UDim2.new(0, 30, 0, 30)
+    mobSpotBtn.Position = UDim2.new(1, -70, 0, 5)
+    mobSpotBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 10)
+    mobSpotBtn.Text = "🎯"
+    mobSpotBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    mobSpotBtn.Font = Enum.Font.GothamBold
+    mobSpotBtn.TextSize = 14
+    Instance.new("UICorner", mobSpotBtn).CornerRadius = UDim.new(0, 6)
+
     local closeMobBtn = Instance.new("TextButton", mobHeader)
     closeMobBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeMobBtn.Position = UDim2.new(1, -38, 0, 5)
+    closeMobBtn.Position = UDim2.new(1, -35, 0, 5)
     closeMobBtn.BackgroundColor3 = Color3.fromRGB(220, 20, 20)
     closeMobBtn.Text = "✕"
     closeMobBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1314,7 +1458,7 @@ local function initScript()
     mobAutoFarmBtn.Size = UDim2.new(1, -24, 0, 38)
     mobAutoFarmBtn.Position = UDim2.new(0, 12, 0, 48)
     mobAutoFarmBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
-    mobAutoFarmBtn.Text = "🤖 Auto Farm [OFF]"
+    mobAutoFarmBtn.Text = "🤖 Auto Farm [OFF / متوقف]"
     mobAutoFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     mobAutoFarmBtn.Font = Enum.Font.GothamBold
     mobAutoFarmBtn.TextSize = 12
@@ -1324,7 +1468,7 @@ local function initScript()
     mobAutoWinBtn.Size = UDim2.new(1, -24, 0, 38)
     mobAutoWinBtn.Position = UDim2.new(0, 12, 0, 91)
     mobAutoWinBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
-    mobAutoWinBtn.Text = "🏆 Auto Win Minigame [OFF]"
+    mobAutoWinBtn.Text = "🏆 Auto Win [OFF / متوقف]"
     mobAutoWinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     mobAutoWinBtn.Font = Enum.Font.GothamBold
     mobAutoWinBtn.TextSize = 12
@@ -1344,7 +1488,7 @@ local function initScript()
     mobChangelogBtn.Size = UDim2.new(1, -24, 0, 36)
     mobChangelogBtn.Position = UDim2.new(0, 12, 0, 175)
     mobChangelogBtn.BackgroundColor3 = Color3.fromRGB(150, 20, 20)
-    mobChangelogBtn.Text = "📜 View Updates"
+    mobChangelogBtn.Text = "📜 View Updates / التحديثات"
     mobChangelogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     mobChangelogBtn.Font = Enum.Font.GothamBold
     mobChangelogBtn.TextSize = 12
@@ -1354,7 +1498,7 @@ local function initScript()
     mobReportBtn.Size = UDim2.new(1, -24, 0, 36)
     mobReportBtn.Position = UDim2.new(0, 12, 0, 216)
     mobReportBtn.BackgroundColor3 = Color3.fromRGB(220, 20, 20)
-    mobReportBtn.Text = "⚠️ Report Bug"
+    mobReportBtn.Text = "⚠️ Report Bug / إبلاغ"
     mobReportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     mobReportBtn.Font = Enum.Font.GothamBold
     mobReportBtn.TextSize = 12
@@ -1364,7 +1508,7 @@ local function initScript()
     mobDiscordBtn.Size = UDim2.new(1, -24, 0, 33)
     mobDiscordBtn.Position = UDim2.new(0, 12, 0, 257)
     mobDiscordBtn.BackgroundColor3 = Color3.fromRGB(70, 10, 10)
-    mobDiscordBtn.Text = "🔗 Copy Discord Link"
+    mobDiscordBtn.Text = "🔗 Discord Link / رابط ديسكورد"
     mobDiscordBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     mobDiscordBtn.Font = Enum.Font.GothamBold
     mobDiscordBtn.TextSize = 12
@@ -1385,7 +1529,7 @@ local function initScript()
     local function copyDiscordLink()
         if setclipboard then
             setclipboard(DiscordInvite)
-            notifyUser("✅ Discord link copied!", "success")
+            notifyUser("✅ Discord link copied! / تم نسخ رابط ديسكورد!", "success")
         end
     end
 
@@ -1400,6 +1544,9 @@ local function initScript()
 
     fishMenuBtn.MouseButton1Click:Connect(function() fishUI.Visible = not fishUI.Visible end)
     mobFishBtn.MouseButton1Click:Connect(function() fishUI.Visible = not fishUI.Visible end)
+
+    spotMenuBtn.MouseButton1Click:Connect(function() spotFisherUI.Visible = not spotFisherUI.Visible end)
+    mobSpotBtn.MouseButton1Click:Connect(function() spotFisherUI.Visible = not spotFisherUI.Visible end)
 
     closePcBtn.MouseButton1Click:Connect(function() pcFrame.Visible = false end)
     closeMobBtn.MouseButton1Click:Connect(function() mobileFrame.Visible = false end)
@@ -1418,7 +1565,7 @@ local function initScript()
         mobTargetCircleBtn.Text = "🎯 Target Circle [ON]"
         mobTargetCircleBtn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
 
-        notifyUser("📱 Mobile Mode Activated", "success")
+        notifyUser("📱 Mobile Mode Activated / تم تفعيل وضع الهاتف", "success")
     end)
 
     pcBtn.MouseButton1Click:Connect(function()
@@ -1429,7 +1576,7 @@ local function initScript()
         if targetCircleFrame then
             targetCircleFrame.Visible = false
         end
-        notifyUser("💻 PC Mode Activated", "success")
+        notifyUser("💻 PC Mode Activated / تم تفعيل وضع الكمبيوتر", "success")
     end)
 
     rebindBtn.MouseButton1Click:Connect(function()
@@ -1444,7 +1591,7 @@ local function initScript()
                     toggleKey = input.KeyCode
                     keyDisplayBtn.Text = tostring(toggleKey.Name)
                     keybindLabel.Text = "Current Bind: " .. tostring(toggleKey.Name)
-                    rebindBtn.Text = "🔄 Bind Key"
+                    rebindBtn.Text = "🔄 Bind / زر"
                     isSettingKey = false
                     connection:Disconnect()
                 end
@@ -1455,14 +1602,14 @@ local function initScript()
     local function updateAutoFarmUI()
         toggleAutoFarm()
         if autoFarmRunning then
-            pcAutoFarmBtn.Text = "🤖 Auto Farm [ON]"
+            pcAutoFarmBtn.Text = "🤖 Auto Farm [ON / يعمل]"
             pcAutoFarmBtn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
-            mobAutoFarmBtn.Text = "🤖 Auto Farm [ON]"
+            mobAutoFarmBtn.Text = "🤖 Auto Farm [ON / يعمل]"
             mobAutoFarmBtn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
         else
-            pcAutoFarmBtn.Text = "🤖 Auto Farm [OFF]"
+            pcAutoFarmBtn.Text = "🤖 Auto Farm [OFF / متوقف]"
             pcAutoFarmBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
-            mobAutoFarmBtn.Text = "🤖 Auto Farm [OFF]"
+            mobAutoFarmBtn.Text = "🤖 Auto Farm [OFF / متوقف]"
             mobAutoFarmBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
         end
     end
@@ -1470,14 +1617,14 @@ local function initScript()
     local function updateAutoWinUI()
         toggleAutoWin()
         if autoWinEnabled then
-            pcAutoWinBtn.Text = "🏆 Auto Win Minigame [ON]"
+            pcAutoWinBtn.Text = "🏆 Auto Win [ON / يعمل]"
             pcAutoWinBtn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
-            mobAutoWinBtn.Text = "🏆 Auto Win Minigame [ON]"
+            mobAutoWinBtn.Text = "🏆 Auto Win [ON / يعمل]"
             mobAutoWinBtn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
         else
-            pcAutoWinBtn.Text = "🏆 Auto Win Minigame [OFF]"
+            pcAutoWinBtn.Text = "🏆 Auto Win Minigame [OFF / متوقف]"
             pcAutoWinBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
-            mobAutoWinBtn.Text = "🏆 Auto Win Minigame [OFF]"
+            mobAutoWinBtn.Text = "🏆 Auto Win [OFF / متوقف]"
             mobAutoWinBtn.BackgroundColor3 = Color3.fromRGB(120, 15, 15)
         end
     end
@@ -1508,7 +1655,6 @@ local function initScript()
     end)
 end
 
--- Hook unique sur Data.hook
 Data.hook("items", function()
     if autoDropEnabled then
         task.spawn(dropFilteredFish)
